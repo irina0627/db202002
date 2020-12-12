@@ -1,0 +1,188 @@
+************************************
+*2018111374 경영정보학과 박세연*
+************************************
+
+mysql -u root -p
+
+CREATE DATABASE library;
+
+USE library;
+
+*************************************************************************************
+*** 테이블 생성을 위한 SQL문
+
+CREATE TABLE member
+(id CHAR(8) NOT NULL, name VARCHAR(20) NOT NULL, phone VARCHAR(13),
+PRIMARY KEY(id));
+
+CREATE TABLE friend
+(id CHAR(8) NOT NULL, friend_id CHAR(8) NOT NULL,
+PRIMARY KEY(id, friend_id),
+FOREIGN KEY(id) REFERENCES member(id));
+
+CREATE TABLE book
+(id CHAR(8) NOT NULL, bookname VARCHAR(20) NOT NULL, 
+publisher VARCHAR(20), genre VARCHAR(10), regdate DATE, newbook VARCHAR(4),
+PRIMARY KEY(id));
+
+CREATE TABLE author
+(book_id CHAR(8) NOT NULL, authorname VARCHAR(20) NOT NULL,
+PRIMARY KEY(book_id, authorname),
+FOREIGN KEY(book_id) REFERENCES book(id));
+
+CREATE TABLE borrow
+(book_id CHAR(8) NOT NULL, member_id CHAR(8) NOT NULL, brw_date DATE NOT NULL,
+exp_rtn_date DATE,
+PRIMARY KEY(book_id, member_id),
+FOREIGN KEY(book_id) REFERENCES book(id),
+FOREIGN KEY(member_id) REFERENCES member(id));
+
+CREATE TABLE reservation
+(book_id CHAR(8) NOT NULL, member_id CHAR(8) NOT NULL,
+PRIMARY KEY(book_id, member_id),
+FOREIGN KEY(book_id) REFERENCES book(id),
+FOREIGN KEY(member_id) REFERENCES member(id));
+
+CREATE TABLE recommend
+(book_id CHAR(8) NOT NULL, member_id CHAR(8) NOT NULL, review VARCHAR(100) NOT NULL,
+PRIMARY KEY(book_id, member_id),
+FOREIGN KEY(book_id) REFERENCES book(id),
+FOREIGN KEY(member_id) REFERENCES member(id));
+
+CREATE TABLE extension
+(book_id CHAR(8) NOT NULL, ext_date DATE NOT NULL,
+PRIMARY KEY(book_id, ext_date),
+FOREIGN KEY(book_id) REFERENCES book(id));
+
+CREATE TABLE returnbook
+(book_id CHAR(8) NOT NULL,
+member_id CHAR(8) NOT NULL,
+rtn_date DATE,
+PRIMARY KEY(book_id, member_id),
+FOREIGN KEY(book_id) REFERENCES book(id),
+FOREIGN KEY(member_id) REFERENCES member(id)
+);
+
+
+*************************************************************************************
+*** 사용자별 작업 내용 처리를 위한 SQL문
+
+* 데이터 삽입
+INSERT INTO member VALUES
+('20200001','박세연','010-1234-5678'),
+('20200002','나태한','010-0000-0002'),
+('20200003','김하나','010-1111-1111'),
+('20200004','최두리','010-2222-2222'),
+('20200005','김파인애플','010-5555-5555'),
+('20200006','도레미','010-8765-4321');
+
+INSERT INTO book VALUES
+('00000001','트렌드코리아2021','미래의 창','경제경영','2020-10-01',NULL), 
+('00000002','죽음1','열린책들','소설','2019-12-01',NULL), 
+('00000003','레미제라블1','민음사','소설','2012-11-01',NULL), 
+('00000004','아몬드','창비','소설','2017-03-01',NULL), 
+('00000005','사피엔스','김영사','인류학','2015-11-01',NULL),
+('00000006','코로나 시대의 공부법','쌤앤파커스','교육','2020-12-01',NULL);
+
+INSERT INTO author VALUES
+('00000001','김난도'),
+('00000001','전미영'),
+('00000001','최지혜'),
+('00000002','베르나르 베르베르'),
+('00000003','빅토르 위고'),
+('00000004','손원평'),
+('00000005','유발 하라리'),
+('00000006','진동섭');
+
+* 친구 맺기
+INSERT INTO friend VALUES
+('20200001','20200002'),
+('20200001','20200003'),
+('20200002','20200001'),
+('20200003','20200001');
+
+
+* 도서 대출하기
+->대출 테이블에 추가
+INSERT INTO borrow VALUES
+('00000001','20200001','2020-12-01',NULL),
+('00000002','20200002','2020-12-03',NULL);
+
+->반납예정일 설정
+UPDATE borrow
+SET exp_rtn_date = DATE_ADD(brw_date, INTERVAL +14 DAY);
+
+
+* 도서 예약하기(현재 대출중인 책이면)
+INSERT INTO reservation VALUES
+('00000001','20200004'),
+('00000002','20200005');
+
+* 도서 예약 취소하기 = 예약테이블에서 삭제
+DELETE
+FROM reservation
+WHERE member_id = (SELECT id FROM member WHERE name = '김파인애플')
+	AND book_id = (SELECT id FROM book WHERE bookname = '죽음1');
+
+
+* 도서 반납하기
+-> 반납테이블에서 반납일 속성에 날짜 추가하기
+INSERT INTO returnbook VALUES
+('00000001','20200001',CURDATE());
+
+->대출테이블에서 삭제하기
+DELETE
+FROM borrow
+WHERE book_id = '00000001';
+
+
+* 도서 추천하기
+INSERT INTO recommend VALUES
+('00000001', '20200001', 'SO AMAZING!'),
+('00000002', '20200002', 'Not bad :)');
+
+* 도서 연장하기
+-> 연장 테이블에 추가
+INSERT INTO extension VALUES
+('00000002',CURDATE());
+
+-> 대출 테이블 업데이트
+UPDATE borrow
+SET exp_rtn_date = DATE_ADD(exp_rtn_date, INTERVAL +7 DAY)
+WHERE book_id = '00000002' AND exp_rtn_date >= (SELECT ext_date FROM extension WHERE book_id = '00000002');
+
+* 전체 책 목록보기
+SELECT book.*, author.authorname
+FROM book, author
+WHERE book.id = author.book_id;
+
+* 장르별 책 찾기(소설 장르 책 보여주기)
+SELECT *
+FROM book, author
+WHERE book.genre = '소설' AND book.id = author.book_id;
+
+* 신간도서 설정
+UPDATE book
+SET newbook = 'yes'
+WHERE regdate >= DATE_ADD(CURDATE(), INTERVAL -3 MONTH);
+
+* 신간도서 목록 보기(등록한지 3개월 이내의 도서)
+SELECT *
+FROM book, author
+WHERE book.newbook = 'yes' AND book.id = author.book_id;
+
+* 책 이름으로 검색하기  예) 아몬드
+SELECT *
+FROM book, author
+WHERE book.bookname = '아몬드' AND book.id = author.book_id;
+
+* 추천 후기 목록보기
+SELECT *
+FROM recommend;
+
+* 예약자 명단 보기
+SELECT book.bookname, member.name
+FROM member, book, reservation
+WHERE member.id = reservation.member_id AND book.id = reservation.book_id;
+
+*************************************************************************************
